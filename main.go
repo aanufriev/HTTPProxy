@@ -1,7 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"github.com/aanufriev/httpproxy/internal/app"
+)
 
 func main() {
-	fmt.Println("Hello, World!")
+	app.RunProxyServer()
 }
