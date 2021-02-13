@@ -2,22 +2,25 @@ package app
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"time"
 )
 
 func RunProxyServer() {
-	router := http.NewServeMux()
-
-	router.HandleFunc("/", proxyHandler)
-
 	port := ":8080"
 
 	server := http.Server{
-		Addr:         port,
-		Handler:      router,
+		Addr: port,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodConnect {
+				handlerHTTPS(w, r)
+				return
+			}
+
+			handlerHTTP(w, r)
+		}),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
@@ -28,7 +31,7 @@ func RunProxyServer() {
 	}
 }
 
-func proxyHandler(w http.ResponseWriter, r *http.Request) {
+func handlerHTTP(w http.ResponseWriter, r *http.Request) {
 	delete(r.Header, "Proxy-Connection")
 	r.RequestURI = ""
 
@@ -42,21 +45,18 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Do(r)
 	if err != nil {
 		fmt.Println("request err: ", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	_, err = io.Copy(w, resp.Body)
 	if err != nil {
-		fmt.Println("read bytes err: ", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Println("transfer answer err: ", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+}
 
-	_, err = w.Write(respBody)
-	if err != nil {
-		fmt.Println("write response err: ", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+func handlerHTTPS(w http.ResponseWriter, r *http.Request) {
+
 }
