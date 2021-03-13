@@ -2,23 +2,40 @@ package app
 
 import (
 	"crypto/tls"
-	"fmt"
+	"database/sql"
 	"log"
 	"net/http"
 	"time"
 
 	proxyDelivery "github.com/aanufriev/httpproxy/internal/pkg/proxy/delivery"
+	proxyRepository "github.com/aanufriev/httpproxy/internal/pkg/proxy/repository"
+	ProxyUsecase "github.com/aanufriev/httpproxy/internal/pkg/proxy/usecase"
+
+	_ "github.com/lib/pq"
 )
 
 func RunProxyServer() {
 	port := ":8080"
 
-	proxyHandler := proxyDelivery.Handler{}
+	db, err := sql.Open("postgres", "host=localhost dbname=requests sslmode=disable")
+	if err != nil {
+		log.Printf("postgres not available: %v", err)
+		return
+	}
+
+	err = db.Ping()
+	if err != nil {
+		log.Printf("no connection with db: %v", err)
+		return
+	}
+
+	proxyRepository := proxyRepository.NewProxyRepository(db)
+	proxyUsecase := ProxyUsecase.NewProxyUsecase(proxyRepository)
+	proxyHandler := proxyDelivery.NewProxyHandler(proxyUsecase)
 
 	server := http.Server{
 		Addr: port,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println(r)
 			delete(r.Header, "Proxy-Connection")
 			r.RequestURI = ""
 
