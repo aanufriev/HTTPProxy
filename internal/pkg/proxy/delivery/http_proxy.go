@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,12 +11,22 @@ import (
 	"net/http/httputil"
 	"time"
 
+	"github.com/aanufriev/httpproxy/internal/pkg/models"
+	"github.com/aanufriev/httpproxy/internal/pkg/proxy/interfaces"
 	"github.com/aanufriev/httpproxy/pkg/cert"
 )
 
-type Handler struct{}
+type ProxyHandler struct {
+	usecase interfaces.Usecase
+}
 
-func (h Handler) HandleHTTP(w http.ResponseWriter, r *http.Request) {
+func NewProxyHandler(usecase interfaces.Usecase) ProxyHandler {
+	return ProxyHandler{
+		usecase: usecase,
+	}
+}
+
+func (h ProxyHandler) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	client := http.Client{
 		Timeout: time.Second * 10,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -47,9 +56,23 @@ func (h Handler) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+
+	req, err := models.ConvertFromHttpRequest(*r)
+	if err != nil {
+		log.Printf("couldn't convert request: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	err = h.usecase.SaveRequest(req)
+	if err != nil {
+		log.Printf("couldn't save request to db: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 }
 
-func (h Handler) HandleHTTPS(w http.ResponseWriter, r *http.Request) {
+func (h ProxyHandler) HandleHTTPS(w http.ResponseWriter, r *http.Request) {
 	host, _, err := net.SplitHostPort(r.Host)
 	if err != nil {
 		log.Printf("couldn't get host: %v", err)
@@ -119,14 +142,25 @@ func (h Handler) HandleHTTPS(w http.ResponseWriter, r *http.Request) {
 	wc.Wait()
 }
 
-func (h Handler) wrap(upstream http.Handler) http.Handler {
+func (h ProxyHandler) wrap(upstream http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println(r)
+		req, err := models.ConvertFromHttpRequest(*r)
+		if err != nil {
+			log.Printf("couldn't convert request: %v", err)
+			return
+		}
+
+		err = h.usecase.SaveRequest(req)
+		if err != nil {
+			log.Printf("couldn't save request to db: %v", err)
+			return
+		}
+
 		upstream.ServeHTTP(w, r)
 	})
 }
 
-func (h Handler) handshake(w http.ResponseWriter, config *tls.Config) (net.Conn, error) {
+func (h ProxyHandler) handshake(w http.ResponseWriter, config *tls.Config) (net.Conn, error) {
 	raw, _, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
