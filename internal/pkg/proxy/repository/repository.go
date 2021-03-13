@@ -45,6 +45,8 @@ func (r ProxyRepository) GetRequests() ([]models.Request, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		requests = append(requests, req)
 	}
 
 	return requests, nil

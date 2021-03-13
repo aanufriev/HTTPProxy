@@ -10,6 +10,8 @@ import (
 	proxyDelivery "github.com/aanufriev/httpproxy/internal/pkg/proxy/delivery"
 	proxyRepository "github.com/aanufriev/httpproxy/internal/pkg/proxy/repository"
 	ProxyUsecase "github.com/aanufriev/httpproxy/internal/pkg/proxy/usecase"
+	repeaterDelivery "github.com/aanufriev/httpproxy/internal/pkg/repeater/delivery"
+	"github.com/gorilla/mux"
 
 	_ "github.com/lib/pq"
 )
@@ -33,7 +35,7 @@ func RunProxyServer() {
 	proxyUsecase := ProxyUsecase.NewProxyUsecase(proxyRepository)
 	proxyHandler := proxyDelivery.NewProxyHandler(proxyUsecase)
 
-	server := http.Server{
+	proxyServer := http.Server{
 		Addr: port,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			delete(r.Header, "Proxy-Connection")
@@ -52,8 +54,17 @@ func RunProxyServer() {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
-	log.Printf("starting server at %s", port)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		log.Printf("starting proxy server at %s", port)
+		log.Fatal(proxyServer.ListenAndServe())
+	}()
+
+	repeatHandler := repeaterDelivery.NewRepeaterHandler(proxyUsecase)
+
+	mux := mux.NewRouter()
+
+	mux.HandleFunc("/requests", repeatHandler.ShowAllRequests)
+	repeaterPort := ":8000"
+	log.Printf("starting repeater at %s", repeaterPort)
+	log.Fatal(http.ListenAndServe(repeaterPort, mux))
 }
