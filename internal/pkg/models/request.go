@@ -1,6 +1,7 @@
 package models
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -24,14 +25,15 @@ func ConvertFromHttpRequest(r http.Request) (Request, error) {
 		return Request{}, err
 	}
 
-	bodyReader, err := r.GetBody()
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return Request{}, err
 	}
 
-	body, err := ioutil.ReadAll(bodyReader)
-	if err != nil {
-		return Request{}, err
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+	if r.URL.Scheme == "" {
+		r.URL.Scheme = "https"
 	}
 
 	return Request{
