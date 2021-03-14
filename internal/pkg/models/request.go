@@ -64,6 +64,7 @@ func ConvertToHttpRequest(r Request) (http.Request, error) {
 		return http.Request{}, err
 	}
 
+	httpRequest.Header = http.Header{}
 	for key, values := range headers {
 		for _, value := range values {
 			httpRequest.Header.Add(key, value)

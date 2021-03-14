@@ -2,10 +2,13 @@ package delivery
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/aanufriev/httpproxy/internal/pkg/models"
 	"github.com/aanufriev/httpproxy/internal/pkg/proxy/interfaces"
 	"github.com/gorilla/mux"
 )
@@ -59,16 +62,22 @@ func (h RepeatHandler) ShowAllRequests(w http.ResponseWriter, r *http.Request) {
 func (h RepeatHandler) ShowRequest(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := mux.Vars(r)["id"]
 	if !ok {
+		log.Printf("couldn't get id")
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
+		log.Printf("couldn't convert id")
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
 	request, err := h.proxyUsecase.GetRequest(id)
 	if err != nil {
+		log.Printf("couldn't get request: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
@@ -79,8 +88,69 @@ func (h RepeatHandler) ShowRequest(w http.ResponseWriter, r *http.Request) {
 	_, err = w.Write([]byte(
 		fmt.Sprintf(responseTemplate, response),
 	))
-
 	if err != nil {
+		log.Printf("couldn't write to client: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+}
+
+func (h RepeatHandler) RepeatRequest(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := mux.Vars(r)["id"]
+	if !ok {
+		log.Printf("couldn't get id")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Printf("couldn't convert id")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	request, err := h.proxyUsecase.GetRequest(id)
+	if err != nil {
+		log.Printf("couldn't get request: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	httpReq, err := models.ConvertToHttpRequest(request)
+	if err != nil {
+		log.Printf("couldn't convert to http request: %v", err)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	client := http.Client{
+		Timeout: time.Second * 10,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Do(&httpReq)
+	if err != nil {
+		log.Printf("request err: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	w.WriteHeader(resp.StatusCode)
+
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		log.Printf("transfer answer err: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 }

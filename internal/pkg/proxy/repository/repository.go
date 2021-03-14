@@ -28,7 +28,10 @@ func (r ProxyRepository) SaveRequest(req models.Request) error {
 }
 
 func (r ProxyRepository) GetRequests() ([]models.Request, error) {
-	rows, err := r.db.Query("SELECT id, method, host, scheme, path, headers, body FROM requests")
+	rows, err := r.db.Query(
+		`SELECT id, method, host, scheme, path, headers, body FROM requests
+		ORDER BY id`,
+	)
 	if err != nil {
 		return nil, err
 	}

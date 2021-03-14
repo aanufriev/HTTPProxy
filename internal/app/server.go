@@ -65,6 +65,7 @@ func RunProxyServer() {
 
 	mux.HandleFunc("/requests", repeatHandler.ShowAllRequests)
 	mux.HandleFunc("/request/{id}", repeatHandler.ShowRequest)
+	mux.HandleFunc("/repeat/{id}", repeatHandler.RepeatRequest)
 
 	repeaterPort := ":8000"
 	log.Printf("starting repeater at %s", repeaterPort)
