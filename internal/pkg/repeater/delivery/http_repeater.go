@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/aanufriev/httpproxy/internal/pkg/proxy/interfaces"
+	"github.com/gorilla/mux"
 )
 
 const responseTemplate = `
@@ -51,6 +52,35 @@ func (h RepeatHandler) ShowAllRequests(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("couldn't write requests to client: %v", err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+}
+
+func (h RepeatHandler) ShowRequest(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := mux.Vars(r)["id"]
+	if !ok {
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return
+	}
+
+	request, err := h.proxyUsecase.GetRequest(id)
+	if err != nil {
+		return
+	}
+
+	response := request.Method + " " + request.Scheme + "://" + request.Host + request.Path + "<br>"
+	response += fmt.Sprintf("Headers: %s <br>", request.Headers)
+	response += fmt.Sprintf("Body: %s <br>", request.Body)
+
+	_, err = w.Write([]byte(
+		fmt.Sprintf(responseTemplate, response),
+	))
+
+	if err != nil {
 		return
 	}
 }

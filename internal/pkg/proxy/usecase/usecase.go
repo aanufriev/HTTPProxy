@@ -22,3 +22,7 @@ func (u ProxyUsecase) SaveRequest(req models.Request) error {
 func (u ProxyUsecase) GetRequests() ([]models.Request, error) {
 	return u.proxyRepository.GetRequests()
 }
+
+func (u ProxyUsecase) GetRequest(id int) (models.Request, error) {
+	return u.proxyRepository.GetRequest(id)
+}
