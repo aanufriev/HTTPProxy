@@ -1,12 +1,26 @@
 package delivery
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/aanufriev/httpproxy/internal/pkg/proxy/interfaces"
 )
+
+const responseTemplate = `
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>requests</title>
+	</head>
+	<body>
+	%s
+	</body>
+	</html>
+`
 
 type RepeatHandler struct {
 	proxyUsecase interfaces.Usecase
@@ -26,28 +40,17 @@ func (h RepeatHandler) ShowAllRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte(`
-		<!DOCTYPE html>
-		<html lang="en">
-		<head>
-			<meta charset="utf-8">
-			<title>requests</title>
-		</head>
-		<body>
-	`))
-
+	var response string
 	for _, request := range requests {
-		_, err = w.Write(
-			[]byte(strconv.Itoa(int(request.ID)) + ": " + request.Method + " " + request.Scheme + "://" + request.Host + request.Path + "<br>"),
-		)
-		if err != nil {
-			log.Printf("couldn't write requests to client: %v", err)
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			return
-		}
+		response += strconv.Itoa(int(request.ID)) + ": " + request.Method + " " + request.Scheme + "://" + request.Host + request.Path + "<br>"
 	}
-	w.Write([]byte(`
-		</body>
-		</html>
-	`))
+
+	_, err = w.Write([]byte(
+		fmt.Sprintf(responseTemplate, response),
+	))
+	if err != nil {
+		log.Printf("couldn't write requests to client: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 }
