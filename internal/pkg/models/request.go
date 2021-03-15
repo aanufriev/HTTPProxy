@@ -3,6 +3,7 @@ package models
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -17,10 +18,16 @@ type Request struct {
 	Path    string
 	Headers string
 	Body    string
+	Params  string
 }
 
 func ConvertFromHttpRequest(r http.Request) (Request, error) {
 	encodedHeaders, err := json.Marshal(r.Header)
+	if err != nil {
+		return Request{}, err
+	}
+
+	encodedParams, err := json.Marshal(r.URL.Query())
 	if err != nil {
 		return Request{}, err
 	}
@@ -43,6 +50,7 @@ func ConvertFromHttpRequest(r http.Request) (Request, error) {
 		Path:    r.URL.Path,
 		Headers: string(encodedHeaders),
 		Body:    string(body),
+		Params:  string(encodedParams),
 	}, nil
 }
 
@@ -64,6 +72,20 @@ func ConvertToHttpRequest(r Request) (http.Request, error) {
 		return http.Request{}, err
 	}
 
+	var params url.Values
+	err = json.Unmarshal([]byte(r.Params), &params)
+	if err != nil {
+		return http.Request{}, err
+	}
+
+	query := httpRequest.URL.Query()
+	for key, values := range params {
+		for _, value := range values {
+			query.Add(key, value)
+		}
+	}
+	httpRequest.URL.RawQuery = query.Encode()
+
 	httpRequest.Header = http.Header{}
 	for key, values := range headers {
 		for _, value := range values {
@@ -72,4 +94,19 @@ func ConvertToHttpRequest(r Request) (http.Request, error) {
 	}
 
 	return httpRequest, nil
+}
+
+func StrFromEncodedParams(encodedParams string) string {
+	var params url.Values
+	err := json.Unmarshal([]byte(encodedParams), &params)
+	if err != nil {
+		return ""
+	}
+
+	result := "?"
+	for key, values := range params {
+		result += fmt.Sprintf("%s=%s", key, strings.Join(values, ","))
+	}
+
+	return result
 }

@@ -19,7 +19,7 @@ import (
 func RunProxyServer() {
 	port := ":8080"
 
-	db, err := sql.Open("postgres", "host=localhost dbname=requests sslmode=disable")
+	db, err := sql.Open("postgres", "host=localhost user=test_user password=test_password dbname=requests sslmode=disable")
 	if err != nil {
 		log.Printf("postgres not available: %v", err)
 		return
@@ -66,6 +66,7 @@ func RunProxyServer() {
 	mux.HandleFunc("/requests", repeatHandler.ShowAllRequests)
 	mux.HandleFunc("/request/{id}", repeatHandler.ShowRequest)
 	mux.HandleFunc("/repeat/{id}", repeatHandler.RepeatRequest)
+	mux.HandleFunc("/scan/{id}", repeatHandler.ScanRequest)
 
 	repeaterPort := ":8000"
 	log.Printf("starting repeater at %s", repeaterPort)

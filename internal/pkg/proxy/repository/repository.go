@@ -19,9 +19,9 @@ func NewProxyRepository(db *sql.DB) interfaces.Repository {
 
 func (r ProxyRepository) SaveRequest(req models.Request) error {
 	_, err := r.db.Exec(
-		`INSERT INTO requests (method, host, scheme, path, headers, body)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		req.Method, req.Host, req.Scheme, req.Path, req.Headers, req.Body,
+		`INSERT INTO requests (method, host, scheme, path, headers, body, params)
+		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+		req.Method, req.Host, req.Scheme, req.Path, req.Headers, req.Body, req.Params,
 	)
 
 	return err
@@ -29,7 +29,7 @@ func (r ProxyRepository) SaveRequest(req models.Request) error {
 
 func (r ProxyRepository) GetRequests() ([]models.Request, error) {
 	rows, err := r.db.Query(
-		`SELECT id, method, host, scheme, path, headers, body FROM requests
+		`SELECT id, method, host, scheme, path, headers, body, params FROM requests
 		ORDER BY id`,
 	)
 	if err != nil {
@@ -42,7 +42,7 @@ func (r ProxyRepository) GetRequests() ([]models.Request, error) {
 	for rows.Next() {
 		err = rows.Scan(
 			&req.ID, &req.Method, &req.Host, &req.Scheme,
-			&req.Path, &req.Headers, &req.Body,
+			&req.Path, &req.Headers, &req.Body, &req.Params,
 		)
 
 		if err != nil {
@@ -58,10 +58,10 @@ func (r ProxyRepository) GetRequests() ([]models.Request, error) {
 func (r ProxyRepository) GetRequest(id int) (models.Request, error) {
 	var req models.Request
 	err := r.db.QueryRow(
-		`SELECT method, host, scheme, path, headers, body FROM requests
+		`SELECT method, host, scheme, path, headers, body, params FROM requests
 		WHERE id = $1`,
 		id,
-	).Scan(&req.Method, &req.Host, &req.Scheme, &req.Path, &req.Headers, &req.Body)
+	).Scan(&req.Method, &req.Host, &req.Scheme, &req.Path, &req.Headers, &req.Body, &req.Params)
 
 	if err != nil {
 		return models.Request{}, err
