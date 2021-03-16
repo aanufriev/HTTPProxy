@@ -30,11 +30,13 @@ const responseTemplate = `
 
 type RepeatHandler struct {
 	proxyUsecase interfaces.Usecase
+	payloads     []string
 }
 
-func NewRepeaterHandler(proxyUsecase interfaces.Usecase) RepeatHandler {
+func NewRepeaterHandler(proxyUsecase interfaces.Usecase, payloads []string) RepeatHandler {
 	return RepeatHandler{
 		proxyUsecase: proxyUsecase,
+		payloads:     payloads,
 	}
 }
 
@@ -48,15 +50,7 @@ func (h RepeatHandler) ShowAllRequests(w http.ResponseWriter, r *http.Request) {
 
 	var response string
 	for _, request := range requests {
-		response += strconv.Itoa(int(request.ID))
-		response += ": "
-		response += request.Method
-		response += " "
-		response += request.Scheme
-		response += "://"
-		response += request.Host
-		response += request.Path
-		response += models.StrFromEncodedParams(request.Params)
+		response += request.StringFromRequest()
 		response += "<br>"
 	}
 
@@ -204,31 +198,47 @@ func (h RepeatHandler) ScanRequest(w http.ResponseWriter, r *http.Request) {
 
 	var resp *http.Response
 
+	infectedParams := make([]string, 0)
+
 	query := httpRequest.URL.Query()
 	for key, values := range query {
 		for i, value := range values {
-			query[key][i] = value + ";cat /etc/passwd;"
-			httpRequest.URL.RawQuery = query.Encode()
-			fmt.Println(httpRequest.URL.Query())
+			for _, payload := range h.payloads {
+				query[key][i] = value + payload
+				httpRequest.URL.RawQuery = query.Encode()
 
-			resp, err = client.Do(&httpRequest)
-			if err != nil {
-				return
+				resp, err = client.Do(&httpRequest)
+				if err != nil {
+					return
+				}
+				defer resp.Body.Close()
+
+				body, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					return
+				}
+
+				if strings.Contains(string(body), "root:") {
+					infectedParams = append(infectedParams, key)
+					break
+				}
+
+				query[key][i] = value
+				httpRequest.URL.RawQuery = query.Encode()
 			}
-			defer resp.Body.Close()
-
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return
-			}
-
-			if strings.Contains(string(body), "root:") {
-				fmt.Println("YES")
-			}
-
-			query[key][i] = value
-			httpRequest.URL.RawQuery = query.Encode()
-			fmt.Println(httpRequest.URL.Query())
 		}
+	}
+
+	_, err = w.Write([]byte(
+		fmt.Sprintf(
+			responseTemplate,
+			request.StringFromRequest()+"<br>"+
+				"params with command injection vulnerability: "+strings.Join(infectedParams, ","),
+		),
+	))
+	if err != nil {
+		log.Printf("couldn't write to client: %v", err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
 	}
 }

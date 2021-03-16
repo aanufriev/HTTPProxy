@@ -7,11 +7,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
 type Request struct {
-	ID      int64
+	ID      int
 	Method  string
 	Host    string
 	Scheme  string
@@ -96,16 +97,35 @@ func ConvertToHttpRequest(r Request) (http.Request, error) {
 	return httpRequest, nil
 }
 
-func StrFromEncodedParams(encodedParams string) string {
+func (r Request) StringFromRequest() string {
+	result := ""
+	result += strconv.Itoa(int(r.ID))
+	result += ": "
+	result += r.Method
+	result += " "
+	result += r.Scheme
+	result += "://"
+	result += r.Host
+	result += r.Path
+	result += r.strFromEncodedParams()
+
+	return result
+}
+
+func (r Request) strFromEncodedParams() string {
 	var params url.Values
-	err := json.Unmarshal([]byte(encodedParams), &params)
+	err := json.Unmarshal([]byte(r.Params), &params)
 	if err != nil {
 		return ""
 	}
 
-	result := "?"
+	result := ""
 	for key, values := range params {
 		result += fmt.Sprintf("%s=%s", key, strings.Join(values, ","))
+	}
+
+	if result != "" {
+		return "?" + result
 	}
 
 	return result

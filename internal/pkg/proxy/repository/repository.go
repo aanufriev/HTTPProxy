@@ -58,10 +58,13 @@ func (r ProxyRepository) GetRequests() ([]models.Request, error) {
 func (r ProxyRepository) GetRequest(id int) (models.Request, error) {
 	var req models.Request
 	err := r.db.QueryRow(
-		`SELECT method, host, scheme, path, headers, body, params FROM requests
+		`SELECT id, method, host, scheme, path, headers, body, params FROM requests
 		WHERE id = $1`,
 		id,
-	).Scan(&req.Method, &req.Host, &req.Scheme, &req.Path, &req.Headers, &req.Body, &req.Params)
+	).Scan(
+		&req.ID, &req.Method, &req.Host, &req.Scheme,
+		&req.Path, &req.Headers, &req.Body, &req.Params,
+	)
 
 	if err != nil {
 		return models.Request{}, err

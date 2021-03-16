@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bufio"
 	"crypto/tls"
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	proxyDelivery "github.com/aanufriev/httpproxy/internal/pkg/proxy/delivery"
@@ -59,7 +61,23 @@ func RunProxyServer() {
 		log.Fatal(proxyServer.ListenAndServe())
 	}()
 
-	repeatHandler := repeaterDelivery.NewRepeaterHandler(proxyUsecase)
+	file, err := os.Open("configs/payloads")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	payloads := make([]string, 0)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		payloads = append(payloads, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	repeatHandler := repeaterDelivery.NewRepeaterHandler(proxyUsecase, payloads)
 
 	mux := mux.NewRouter()
 
